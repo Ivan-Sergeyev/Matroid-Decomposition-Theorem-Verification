@@ -1,3 +1,4 @@
+-- This file was edited with the help of LLMs.
 import Seymour.Matroid.Duality
 import Seymour.Matroid.Graphicness
 
@@ -62,7 +63,7 @@ private lemma ll' {α β : Type*} [DecidableEq α] (X Y : Set α) (i : Y.Elem) (
 
 private lemma eq_rec_set_apply {α R : Type*} {X Y1 Y2 : Set α}
   (h : Y1 = Y2) (f : ↑X → ↑Y1 → R) (i : ↑X) (j : ↑Y2) :
-  Eq.rec (motive := fun (x : Set α) _ => ↑X → ↑x → R) f h i j = 
+  Eq.rec (motive := fun (x : Set α) _ => ↑X → ↑x → R) f h i j =
   f i (Eq.rec (motive := fun (x : Set α) _ => ↑x) j h.symm) := by
   subst h
   rfl
@@ -120,7 +121,7 @@ variable [DecidableEq α]
 
 lemma StandardRepr.toMatroid.isBase_iff {S : StandardRepr α R} [Fintype S.X] [Fintype S.Y] {I : Set α} (hI : I ⊆ (S.X ∪ S.Y)) :
     S.toMatroid.IsBase I ↔ (I.ncard = S.X.ncard ∧ LinearIndependent R (S.toFull.submatrix id hI.elem : Matrix S.X I R)ᵀ ) := by
-  set small : Matrix S.X I R := S.toFull.submatrix id hI.elem 
+  set small : Matrix S.X I R := S.toFull.submatrix id hI.elem
   constructor
   · intro hI_base
     have hI_size : I.ncard = S.X.ncard := by
@@ -162,7 +163,7 @@ private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R) [
       convert_to S.Y.ncard = ((S.X ∪ S.Y) \ I).ncard
       rw [Set.ncard_diff hI, Set.ncard_union_eq S.hXY]
       simp [hSize]
-    apply Matrix.almost_square_transpose_LinearIndependent N' 
+    apply Matrix.almost_square_transpose_LinearIndependent N'
     convert this
     exact hN_rows
 
@@ -179,7 +180,7 @@ private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R) [
       obtain ⟨i, hi⟩ := h_nz
       exact hi (congr_fun h i)
 
-  have hM'_isFull (e : I → R) : M' *ᵥ e = 0 → e = 0 := by 
+  have hM'_isFull (e : I → R) : M' *ᵥ e = 0 → e = 0 := by
     intro h_mul
     ext i
     apply Fintype.linearIndependent_iff.mp hM' e
@@ -189,7 +190,7 @@ private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R) [
     ext x
     simp [mul_comm]
   have : LinearIndependent R N := by
-    apply Fintype.linearIndependent_iff.mpr 
+    apply Fintype.linearIndependent_iff.mpr
     intro g hg j
     rw [funext_iff] at hg
     have := hg ⟨j, Set.subset_union_right j.2⟩
@@ -201,16 +202,16 @@ private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R) [
       intro i
       congr 1
       simp only [Matrix.fromCols]
-      clear this hg g hM'_isFull hN'2 p U hN' hM' M' h0 
+      clear this hg g hM'_isFull hN'2 p U hN' hM' M' h0
       clear this N' N M hSize hI
       generalize hX : S.X = AX at *
       generalize hY : S.Y = AY at *
-      subst hXY 
+      subst hXY
       subst hYX
       simp only
       rw [eq_rec_set_apply (Set.union_comm S'.X S'.Y)]
       simp only [Function.comp_apply, Subtype.toSum, Matrix.of_apply]
-      split 
+      split
       · simp only [Sum.elim_inl]
         next h =>
           apply congrArg
@@ -223,7 +224,7 @@ private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R) [
       ↓reduceIte] at this
     exact this
 
-  have hN_isFull (e : S.Y → R) :  Nᵀ *ᵥ e = 0 → e = 0 := by 
+  have hN_isFull (e : S.Y → R) :  Nᵀ *ᵥ e = 0 → e = 0 := by
     intro h_mul
     ext i
     apply Fintype.linearIndependent_iff.mp this e
@@ -252,7 +253,7 @@ private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R) [
     have hi := congr_fun this i_cast
     exact hi
   have he6 : M' *ᵥ v' = 0 := by
-    ext i 
+    ext i
     have h4_i := congr_fun he4 i
     rw [← h4_i]
     simp only [M', Matrix.mulVec, Matrix.submatrix, dotProduct, v', id_eq, HasSubset.Subset.elem, Matrix.of_apply]
@@ -270,7 +271,7 @@ private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R) [
     exact Equiv.sum_comp e_I (fun x => M i x * v x)
 
   have v'_is_zero : v' = 0 := he3 he6
-  clear he3 he6 
+  clear he3 he6
   have v_is_zero : v = 0 := by
     ext i
     by_cases h : p i
@@ -334,17 +335,17 @@ private lemma dual_toMatroid_one_way {I : Set α}(S : StandardRepr α R) (hI : I
   have hI' := by dsimp [J, StandardRepr.dual] at hI; rw [Set.union_comm] at hI; exact hI
   have h_union_fin : (S.X ∪ S.Y).Finite := (Set.toFinite S.X).union (Set.toFinite S.Y)
   have : Fintype ↑I := by exact (Set.Finite.subset h_union_fin hI').fintype
-  
+
   rw [← same_E2, StandardRepr.toMatroid.isBase_iff (S := S.dual) (hI := hJ)]
   rw [StandardRepr.toMatroid.isBase_iff (S := S) (I := I) (hI := by rw [← same_E2] at hI; exact hI)] at hI_base
 
   constructor
   · convert_to (S.X ∪ S.Y).ncard - I.ncard = S.Y.ncard
     · rw [Set.ncard_diff, S.toMatroid_E]
-      exact hI' 
+      exact hI'
     · have : S.X.ncard + S.Y.ncard = (S.X ∪ S.Y).ncard := by rw [Set.ncard_union_eq S.hXY]
       omega
-  · 
+  ·
     have := dual_standardrepr_dual_matroid_helper S S.dual I rfl rfl (subset_of_subset_of_eq hI same_E.symm) hI_size (StandardDualOrto S)
     set M := S.dual.toFull
     set N := S.toFull
@@ -417,7 +418,7 @@ lemma Matroid.isRegular.dual {M : Matroid α} (hM : M.IsRegular) (hM_is_finite :
     have := h_someBase.subset_ground
     rw [hEq] at this
     exact (hM_is_finite.ground_finite.subset this).fintype
-  obtain ⟨S, _, hS, hSTU⟩ := x.exists_standardRepr_isBase_isTotallyUnimodular h_someBase hTU 
+  obtain ⟨S, _, hS, hSTU⟩ := x.exists_standardRepr_isBase_isTotallyUnimodular h_someBase hTU
   have x_finite: Fintype S.X := by
     have := Matroid.rankFinite_of_finite M
     rw [← hEq, ← hS] at this
@@ -430,7 +431,7 @@ lemma Matroid.isRegular.dual {M : Matroid α} (hM : M.IsRegular) (hM_is_finite :
     have := S.toMatroid_E
     have h_sub : S.Y ⊆ S.toMatroid.E := by
       rw [this]
-      exact Set.subset_union_right 
+      exact Set.subset_union_right
     have hY_fin : S.Y.Finite := x.subset h_sub
     exact hY_fin.fintype
 
@@ -438,7 +439,7 @@ lemma Matroid.isRegular.dual {M : Matroid α} (hM : M.IsRegular) (hM_is_finite :
   refine ⟨S'.X, S'.X ∪ S'.Y, S'.toFull, ?_⟩
   constructor
   · change Matrix.IsTotallyUnimodular (((1 : Matrix S.Y S.Y _) ◫ -S.Bᵀ) · ∘ Subtype.toSum)
-    have h1 : S.Bᵀ.IsTotallyUnimodular := by 
+    have h1 : S.Bᵀ.IsTotallyUnimodular := by
       rw [← Matrix.transpose_isTotallyUnimodular_iff] at hSTU
       exact hSTU
     have h2 : (-S.Bᵀ).IsTotallyUnimodular := h1.neg
