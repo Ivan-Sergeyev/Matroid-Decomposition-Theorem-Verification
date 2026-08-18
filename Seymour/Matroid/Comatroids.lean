@@ -62,13 +62,13 @@ private lemma ll' {α β : Type*} [DecidableEq α] (X Y : Set α) (i : Y.Elem) (
   apply Subtype.subst_elem
 
 private lemma eq_rec_set_apply {α R : Type*} {X Y₁ Y₂ : Set α}
-    (h : Y₁ = Y₂) (f : ↑X → ↑Y₁ → R) (i : ↑X) (j : ↑Y₂) : -- TODO improve
-    Eq.rec (motive := fun (x : Set α) _ => ↑X → ↑x → R) f h i j =
-    f i (Eq.rec (motive := fun (x : Set α) _ => ↑x) j h.symm) := by
-  subst h
+    (hYY : Y₁ = Y₂) (f : X → Y₁ → R) (i : X) (j : Y₂) :
+    (hYY ▸ f) i j = f i (hYY.symm ▸ j) := by
+  subst hYY
   rfl
+
 private lemma cast_val_eq {α : Type*} {s t : Set α} (hst : s = t) (x : α) (hx : x ∈ s) :
-    (hst ▸ Subtype.mk x hx : t).val = x := by
+    (hst ▸ Subtype.mk x hx).val = x := by
   subst hst
   rfl
 
@@ -77,81 +77,74 @@ end typing_hell
 
 variable {α R : Type*} [Field R]
 
-lemma Matroid.isBase_ncard {M : Matroid α} (hM : M.RankFinite) {I J : Set α} (hIJ : I.ncard = J.ncard) (hI : M.IsBase I) (hJ : M.Indep J) :
-    M.IsBase J := by
-  rw [Matroid.isBase_iff_maximal_indep]
-  simp only [Maximal, hJ, Set.le_eq_subset, true_and]
-  intro y hY hJy
-  obtain ⟨B, ⟨hB_base, hB_subset⟩⟩ := hY.exists_isBase_superset
-  obtain ⟨finite_base, h_finite_base⟩  := hM.exists_finite_isBase
-  have hB_is_finite := h_finite_base.left.finite_of_finite h_finite_base.right hB_base
-  have hy_is_finite := hB_is_finite.subset hB_subset
-  have hyJ : y.ncard ≤ J.ncard := by
-    have hBJ : B.ncard = J.ncard := by
-      rw [←hIJ]
-      exact congr_arg ENat.toNat ((Matroid.isBase_exchange M).encard_isBase_eq hB_base hI)
-    rw [←hBJ]
-    exact Set.ncard_le_ncard hB_subset hB_is_finite
-  exact (Set.eq_of_subset_of_ncard_le hJy hyJ hy_is_finite).symm.subset
+lemma Matroid.isBase_of_isBase_ncard_eq_ncard {M : Matroid α} (hM : M.RankFinite) -- TODO upstream
+    {G I : Set α} (hGI : G.ncard = I.ncard) (hMG : M.IsBase G) (hMI : M.Indep I) :
+    M.IsBase I := by
+  simp_rw [Matroid.isBase_iff_maximal_indep, Maximal, hMI, Set.le_eq_subset, true_and]
+  intro Y hY hIY
+  obtain ⟨B, hMB, hYB⟩ := hY.exists_isBase_superset
+  obtain ⟨C, hC⟩ := hM.exists_finite_isBase
+  have B_is_finite := hC.left.finite_of_finite hC.right hMB
+  have Y_is_finite := B_is_finite.subset hYB
+  have hYI : Y.ncard ≤ I.ncard := by
+    have hBI : B.ncard = I.ncard := by
+      rw [←hGI]
+      exact congr_arg ENat.toNat (M.isBase_exchange.encard_isBase_eq hMB hMG)
+    rw [←hBI]
+    exact Set.ncard_le_ncard hYB B_is_finite
+  exact (Set.eq_of_subset_of_ncard_le hIY hYI Y_is_finite).symm.subset
 
-lemma Matrix.almost_square_transpose_LinearIndependent {A B : Set α} [Fintype A] [Fintype B] (N : Matrix A B R) (h_card : #A = #B) :
+lemma Matrix.almost_square_transpose_LinearIndependent {A B : Set α} [Fintype A] [Fintype B] (N : Matrix A B R)
+    (hAB : #A = #B) :
     LinearIndependent R N → LinearIndependent R Nᵀ := by
-  intro hN_rows
-  rw [linearIndependent_iff_card_eq_finrank_span] at hN_rows
-  rw [linearIndependent_iff_card_eq_finrank_span, ←h_card, hN_rows]
-  have {U V : Set α} [Fintype U] [Fintype V] (M : Matrix U V R) : Set.finrank R (Set.range M) = M.rank := by -- TODO extract
-    rewrite [Matrix.rank_eq_finrank_span_row M]
-    rfl
-  repeat rw [this]
-  exact (Matrix.rank_transpose N).symm
+  intro hARN
+  rw [linearIndependent_iff_card_eq_finrank_span] at hARN
+  rw [linearIndependent_iff_card_eq_finrank_span, ←hAB, hARN]
+  have {U V : Set α} [Fintype U] [Fintype V] (M : Matrix U V R) : Set.finrank R M.range = M.rank := -- TODO name
+    M.rank_eq_finrank_span_row.symm
+  rw [this, this]
+  exact N.rank_transpose.symm
 
 
 variable [DecidableEq α]
 
 lemma StandardRepr.toMatroid.isBase_iff {S : StandardRepr α R} [Fintype S.X] [Fintype S.Y] {I : Set α} (hI : I ⊆ (S.X ∪ S.Y)) :
-    S.toMatroid.IsBase I ↔ (I.ncard = S.X.ncard ∧ LinearIndependent R (S.toFull.submatrix id hI.elem : Matrix S.X I R)ᵀ ) := by
-  set small : Matrix S.X I R := S.toFull.submatrix id hI.elem
+    S.toMatroid.IsBase I ↔ (I.ncard = S.X.ncard ∧ LinearIndependent R (S.toFull.submatrix id hI.elem)ᵀ) := by
   constructor
-  · intro hI_base
-    have hI_size : I.ncard = S.X.ncard :=
-      congr_arg ENat.toNat ((S.toMatroid.isBase_exchange).encard_isBase_eq hI_base S.toMatroid_isBase_X)
-    simp only [hI_size, true_and]
-    rw [StandardRepr.toMatroid, Matrix.toMatroid, IndepMatroid.matroid_IsBase, Maximal] at hI_base
-    have : S.toMatroid.Indep I := hI_base.left
-    rw [StandardRepr.toMatroid_indep_iff_submatrix] at this
-    obtain ⟨hI, this⟩ := this
-    convert this
-  intro ⟨hI_size, linear_indep⟩
-  apply Matroid.isBase_ncard (S.toMatroid_rankFinite_of_finite_X) hI_size.symm S.toMatroid_isBase_X
-  rw [StandardRepr.toMatroid_indep_iff_submatrix]
-  use hI
-  convert linear_indep
+  · intro hSI
+    have hIX : I.ncard = S.X.ncard :=
+      congr_arg ENat.toNat ((S.toMatroid.isBase_exchange).encard_isBase_eq hSI S.toMatroid_isBase_X)
+    simp only [hIX, true_and]
+    rw [StandardRepr.toMatroid, Matrix.toMatroid, IndepMatroid.matroid_IsBase, Maximal] at hSI
+    have : S.toMatroid.Indep I := hSI.left
+    rw [S.toMatroid_indep_iff_submatrix] at this -- TODO refactor
+    exact this.choose_spec
+  · intro ⟨hIX, linear_indep⟩
+    apply Matroid.isBase_of_isBase_ncard_eq_ncard (S.toMatroid_rankFinite_of_finite_X) hIX.symm S.toMatroid_isBase_X
+    rw [StandardRepr.toMatroid_indep_iff_submatrix]
+    use hI
+    exact linear_indep
 
-private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R) [Fintype S.X] [Fintype S.Y] [Fintype S'.X] [Fintype S'.Y] (I : Set α) [Fintype I]
-    (hXY : S.X = S'.Y) (hYX : S.Y = S'.X) (hI : I ⊆ (S.X ∪ S.Y)) (hSize : I.ncard = S.X.ncard) :
+private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R)
+    [Fintype S.X] [Fintype S.Y] [Fintype S'.X] [Fintype S'.Y]
+    (I : Set α) [Fintype I] (hXY : S.X = S'.Y) (hYX : S.Y = S'.X) (hI : I ⊆ (S.X ∪ S.Y)) (hIX : I.ncard = S.X.ncard) :
     let M : Matrix S.X (S.X ∪ S.Y).Elem R := S.toFull
     let N : Matrix S.Y (S.X ∪ S.Y).Elem R := hXY ▸ hYX ▸ Set.union_comm S'.Y S'.X ▸ S'.toFull
     M * Nᵀ = 0 →
     let M' : Matrix S.X I R := M.submatrix id hI.elem
     let N' : Matrix S.Y ((S.X ∪ S.Y) \ I).Elem R := N.submatrix id Set.diff_subset.elem
-    LinearIndependent R M'ᵀ → LinearIndependent R N'ᵀ
-    := by
+    LinearIndependent R M'ᵀ → LinearIndependent R N'ᵀ := by
   intro M N h0 M' N' hM'
   by_contra hN'
   let U := (S.X ∪ S.Y).Elem
   let p : U → Prop := (·.val ∈ I)
-  have : ¬ LinearIndependent R N' := by
-    intro hN_rows
-    apply hN'
-    have : #S.Y = #((S.X ∪ S.Y) \ I).Elem := by
-      repeat rw [Fintype.card_eq_nat_card]
-      convert_to S.Y.ncard = ((S.X ∪ S.Y) \ I).ncard
-      rw [Set.ncard_diff hI, Set.ncard_union_eq S.hXY]
-      simp [hSize]
-    apply Matrix.almost_square_transpose_LinearIndependent N'
-    convert this
-    exact hN_rows
-  have hN'2 : ∃ e: S.Y → R, N'ᵀ *ᵥ e = 0 ∧ e ≠ 0 := by
+  have : ¬ LinearIndependent R N' := (by
+    refine hN' <| N'.almost_square_transpose_LinearIndependent ?_ ·
+    repeat rw [Fintype.card_eq_nat_card]
+    convert_to S.Y.ncard = ((S.X ∪ S.Y) \ I).ncard
+    rw [Set.ncard_diff hI, Set.ncard_union_eq S.hXY]
+    simp [hIX])
+  have ⟨u, hu0⟩ : ∃ e : S.Y → R, N'ᵀ *ᵥ e = 0 ∧ e ≠ 0 := by
     obtain ⟨e, h_sum, h_nz⟩ := Fintype.not_linearIndependent_iff.→ this
     use e
     constructor
@@ -159,9 +152,9 @@ private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R) [
       rw [←congr_fun h_sum i]
       simp [Matrix.mulVec, dotProduct, mul_comm]
     · simp only [ne_eq]
-      intro h
+      intro hei
       obtain ⟨i, hi⟩ := h_nz
-      exact hi (congr_fun h i)
+      exact hi (congr_fun hei i)
   have hM'_isFull (e : I → R) : M' *ᵥ e = 0 → e = 0 := by
     intro h_mul
     ext
@@ -180,15 +173,14 @@ private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R) [
     have : ∑ x : S.Y, g x * (1 : Matrix S.Y S.Y R) x j = 0 := by
       rw [←this]
       apply Fintype.sum_congr
-      intro i
+      intro
       congr 1
       simp only [Matrix.fromCols]
-      clear this hg g hM'_isFull hN'2 p U hN' hM' M' h0
-      clear this N' N M hSize hI
+      clear this hg g hM'_isFull hu0 u p U hN' hM' M' h0
+      clear this N' N M hIX hI
       generalize hX : S.X = X at *
       generalize hY : S.Y = Y at *
       subst hXY hYX
-      dsimp only
       rw [eq_rec_set_apply (Set.union_comm S'.X S'.Y)]
       simp only [Function.comp_apply, Subtype.toSum, Matrix.of_apply]
       split
@@ -197,8 +189,9 @@ private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R) [
         ext
         rw [cast_val_eq]
       · rename_i h_not
+        exfalso
         rw [cast_val_eq] at h_not
-        exact False.elim (h_not j.property)
+        exact h_not j.property
     simp only [Matrix.one_apply, mul_ite, mul_one, mul_zero, Finset.sum_ite_eq', Finset.mem_univ, ↓reduceIte] at this
     exact this
   have hN_isFull : ∀ e : S.Y → R, Nᵀ *ᵥ e = 0 → e = 0 := by
@@ -210,47 +203,41 @@ private lemma dual_standardrepr_dual_matroid_helper (S S' : StandardRepr α R) [
     rw [←h_mul]
     ext x
     simp [mul_comm]
-  let e_I : I ≃ { x : (S.X ∪ S.Y).Elem // p x } := {
+  let e : I ≃ { x : (S.X ∪ S.Y).Elem // p x } := {
     toFun := fun x => ⟨⟨x.val, hI x.prop⟩, x.prop⟩
     invFun := fun x => ⟨x.val.val, x.prop⟩
     left_inv := ↓(Subtype.ext rfl)
     right_inv := ↓(Subtype.ext rfl)
   }
-  obtain ⟨e, he0⟩ := hN'2
-  let v := Nᵀ *ᵥ e
-  have he2 := hN_isFull e
-  let v' : I → R := fun j => v ⟨j.val, hI j.prop⟩
-  have he3 := hM'_isFull v'
-  have he4 : M *ᵥ v = 0 := by
+  let v := Nᵀ *ᵥ u
+  let v' : I → R := (v <| hI.elem ·)
+  have hMv0 : M *ᵥ v = 0 := by
     rw [Matrix.mulVec_mulVec, h0, Matrix.zero_mulVec]
-  have hi : ∀ i : { x : U // ¬ p x }, v i = 0 := by
+  have hv : ∀ i : { x : U // ¬ p x }, v i = 0 := by
     intro i
-    let i_cast : ((S.X ∪ S.Y) \ I).Elem := ⟨i.val.val, ⟨i.val.property, i.property⟩⟩
-    exact congr_fun he0.left i_cast
+    exact congr_fun hu0.left ⟨i.val.val, ⟨i.val.property, i.property⟩⟩
   have he6 : M' *ᵥ v' = 0 := by
     ext i
-    have h4_i := congr_fun he4 i
-    rw [←h4_i]
+    rw [←congr_fun hMv0 i]
     simp only [M', Matrix.mulVec, Matrix.submatrix, dotProduct, v', id_eq, HasSubset.Subset.elem, Matrix.of_apply]
     symm
     have : ∑ x : U, M i x * v x = ∑ x : {x : U // p x}, M i x * v x + ∑ x : {x : U // ¬ p x}, M i x * v x := by
       classical
       symm
       exact Fintype.sum_subtype_add_sum_subtype (·.val ∈ I) (fun x : (S.X ∪ S.Y).Elem => M i x * v x)
-    have hh : ∑ x : { x : U // ¬ p x }, M i x * v x = 0 := by
-      simp [p, hi]
-    simp only [hh, add_zero, U, p, M] at this
+    have hMv : ∑ x : { x : U // ¬ p x }, M i x * v x = 0 := by
+      simp [p, hv]
+    simp only [hMv, add_zero, U, p, M] at this
     rw [this]
     symm
-    exact e_I.sum_comp (fun x => M i x * v x)
-  have v'_is_zero : v' = 0 := he3 he6
-  clear he3 he6
+    exact e.sum_comp (fun x => M i x * v x)
+  have v'_is_zero : v' = 0 := hM'_isFull v' he6
   have v_is_zero : v = 0 := by
     ext i
     by_cases hpi : p i
     · exact congr_fun v'_is_zero ⟨i.val, hpi⟩
-    · exact hi ⟨i, hpi⟩
-  exact he0.right (he2 v_is_zero)
+    · exact hv ⟨i, hpi⟩
+  exact hu0.right (hN_isFull u v_is_zero)
 
 private lemma standardRepr_dual_orto (S : StandardRepr α R) [Fintype S.X] [Fintype S.Y] :
     S.toFull * (Set.union_comm S.X S.Y ▸ S.dual.toFull)ᵀ = 0 := by
@@ -284,21 +271,19 @@ private lemma standardRepr_dual_orto (S : StandardRepr α R) [Fintype S.X] [Fint
         fun x : S.Y => Matrix.of (fun i : S.Y => (1 : Matrix S.Y S.Y R) i ⊕ᵥ (-S.Bᵀ) i) x ∘ Subtype.toSum) j ⟨y.val, Set.subset_union_right y.property⟩ =
       (1 : Matrix S.Y S.Y R) j y
   · intro y
-    show
-      ((Set.union_comm S.X S.Y).symm ▸
-        fun x : S.Y => (fun i : S.Y => (1 : Matrix S.Y S.Y R) i ⊕ᵥ (-S.Bᵀ) i) x ∘ Subtype.toSum) j ⟨y.val, Set.subset_union_right y.property⟩ =
-      (1 : Matrix S.Y S.Y R) j y
     convert ll' S.X S.Y y j 1 (-S.Bᵀ)
     simp
   simp_rw [hh]
   rw [sum_matrix_times_one]
 
-private lemma dual_toMatroid_one_way {I : Set α} (S : StandardRepr α R) (hI : I ⊆ S.dual.toMatroid.E) [Fintype S.X] [Fintype S.Y] : S.toMatroid.IsBase I → S.dual.toMatroid.IsBase (S.dual.toMatroid.E \ I) := by
-  intro hI_base
+private lemma StandardRepr.dual_toMatroid_one_way (S : StandardRepr α R)
+    {I : Set α} (hI : I ⊆ S.dual.toMatroid.E) [Fintype S.X] [Fintype S.Y] :
+    S.toMatroid.IsBase I → S.dual.toMatroid.IsBase (S.dual.toMatroid.E \ I) := by
+  intro hSI
   set J := S.toMatroid.E \ I
   have same_E : S.toMatroid.E = S.dual.toMatroid.dual.E := by simp [StandardRepr.dual, Set.union_comm]
   have same_E2 : S.toMatroid.E = S.dual.toMatroid.E := by simp [StandardRepr.dual, Set.union_comm]
-  have hI_size : I.ncard = S.X.ncard := congr_arg ENat.toNat ((S.toMatroid.isBase_exchange).encard_isBase_eq hI_base S.toMatroid_isBase_X)
+  have hIX : I.ncard = S.X.ncard := congr_arg ENat.toNat ((S.toMatroid.isBase_exchange).encard_isBase_eq hSI S.toMatroid_isBase_X)
   have hJ : J ⊆ S.dual.toMatroid.E := by unfold J; rw [same_E2]; exact Set.diff_subset
   have : Fintype S.dual.X := by dsimp [StandardRepr.dual]; assumption
   have : Fintype S.dual.Y := by dsimp [StandardRepr.dual]; assumption
@@ -306,20 +291,20 @@ private lemma dual_toMatroid_one_way {I : Set α} (S : StandardRepr α R) (hI : 
   have h_union_fin : (S.X ∪ S.Y).Finite := (Set.toFinite S.X).union (Set.toFinite S.Y)
   have : Fintype ↑I := (Set.Finite.subset h_union_fin hI').fintype
   rw [←same_E2, StandardRepr.toMatroid.isBase_iff hJ]
-  rw [StandardRepr.toMatroid.isBase_iff (by rw [←same_E2] at hI; exact hI)] at hI_base
+  rw [StandardRepr.toMatroid.isBase_iff (by rw [←same_E2] at hI; exact hI)] at hSI
   constructor
   · convert_to (S.X ∪ S.Y).ncard - I.ncard = S.Y.ncard
     · rwa [Set.ncard_diff, S.toMatroid_E]
     · have : (S.X ∪ S.Y).ncard = S.X.ncard + S.Y.ncard := Set.ncard_union_eq S.hXY
       omega
-  · have := dual_standardrepr_dual_matroid_helper S S.dual I rfl rfl (subset_of_subset_of_eq hI same_E.symm) hI_size (standardRepr_dual_orto S)
+  · have := dual_standardrepr_dual_matroid_helper S S.dual I rfl rfl (subset_of_subset_of_eq hI same_E.symm) hIX (standardRepr_dual_orto S)
     set M := S.dual.toFull
     set N := S.toFull
-    have t := this hI_base.right
-    clear hI_base this N
+    have t := this hSI.right
+    clear hSI this N
     simp only [Matrix.transpose_submatrix] at t
     simp only [J, S.toMatroid_E]
-    have h : S.dual.X = S.Y := by dsimp [StandardRepr.dual]
+    have : S.dual.X = S.Y := by dsimp [StandardRepr.dual]
     convert t using 1
     ext r c
     simp only [Matrix.submatrix_apply, Matrix.transpose_apply, id]
@@ -350,7 +335,7 @@ lemma StandardRepr.dual_toMatroid_dual (S : StandardRepr α R) [Fintype S.X] [Fi
     rw [same_E, Matroid.dual_ground] at hI
     simp only [hI, and_true]
     constructor
-    · exact dual_toMatroid_one_way S hI
+    · exact S.dual_toMatroid_one_way hI
     · set J := S.toMatroid.E \ I
       set hJ : J ⊆ S.toMatroid.E := Set.diff_subset
       have : Fintype S.dual.X := by
@@ -359,7 +344,7 @@ lemma StandardRepr.dual_toMatroid_dual (S : StandardRepr α R) [Fintype S.X] [Fi
       have : Fintype S.dual.Y := by
         dsimp [StandardRepr.dual]
         assumption
-      have := dual_toMatroid_one_way S.dual hJ
+      have := S.dual.dual_toMatroid_one_way hJ
       simp only [Matrix.toMatroid_E, StandardRepr.dual_dual, sdiff_sdiff_right_self, Set.inf_eq_inter, J] at this
       convert_to S✶.toMatroid.IsBase ((S.X ∪ S.Y) \ I) → S.toMatroid.IsBase ((S.X ∪ S.Y) ∩ I)
       · rw [←same_E2]

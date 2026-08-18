@@ -84,6 +84,7 @@ lemma sum_one_times_matrix {α β : Type*} [DecidableEq α] [CommSemiring β] {x
     exact Matrix.one_apply_ne' hix
   )
   simp
+
 lemma sum_matrix_times_one {α β : Type*} [DecidableEq α] [CommSemiring β] {x : α} [Fintype α]
     (f : α → β) :
     ∑ i : α, f i * (1 : Matrix α α β) x i = f x := by
